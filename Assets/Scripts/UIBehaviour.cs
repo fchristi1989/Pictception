@@ -8,7 +8,8 @@ public class UIBehaviour : MonoBehaviour
     private GameObject testPrefab = null;
 
     private const float DISTANCE = 0.3f;
-    private const float RESIZER = 0.0001f;
+    private const float FOTORESIZER = 0.001f;
+    private const float FRAMERESIZER = 0.01f;
 
     /*
     private const string TITLE = "Pictception";
@@ -20,6 +21,8 @@ public class UIBehaviour : MonoBehaviour
 
     private float oldDistanceY = 0;
     private float distanceY = 0;
+
+    private float digitalZoom = 1.0f;
 
 
     // Start is called before the first frame update
@@ -63,7 +66,9 @@ public class UIBehaviour : MonoBehaviour
         
         Renderer renderer = photo.GetComponent<Renderer>();
         Material material = renderer.material;
-        int minimum = Mathf.Min(screenShot.width, screenShot.height);
+
+        int minimum = (int) Mathf.Min(screenShot.width * digitalZoom, screenShot.height * digitalZoom);
+
         int centerX = screenShot.width / 2;
         int centerY = screenShot.height / 2;
 
@@ -193,9 +198,6 @@ public class UIBehaviour : MonoBehaviour
 
     private void CheckResize()
     {
-        if (selected == null)
-            return;
-
         if (Input.touchCount == 2)
         {
 
@@ -208,16 +210,39 @@ public class UIBehaviour : MonoBehaviour
                 }
                 else
                 {
-                    Vector3 scale = selected.transform.lossyScale;
                     oldDistanceY = distanceY;
                     distanceY = Mathf.Abs(Input.GetTouch(0).position.y - Input.GetTouch(1).position.y);
 
-                    if (distanceY > oldDistanceY)
-                        selected.transform.localScale = new Vector3(scale.x * 1.0f + RESIZER, scale.y * 1.0f + RESIZER, scale.z * 1.0f + RESIZER);
+                    if (selected == null)
+                    {
+                        frame.SetActive(true);
+
+                        if (distanceY > oldDistanceY && digitalZoom < 1f)
+                        {
+                            digitalZoom += FRAMERESIZER;
+                        }
+                        else if (distanceY < oldDistanceY && digitalZoom > 0f)
+                        {
+                            digitalZoom -= FRAMERESIZER;
+                        }
+
+                        float min = Mathf.Min(Screen.height, Screen.width);
+                        Image image = frame.GetComponent<Image>();
+                        image.rectTransform.sizeDelta = new Vector2(min * digitalZoom, min * digitalZoom);
+                    }
                     else
-                        selected.transform.localScale = new Vector3(scale.x * 1.0f - RESIZER, scale.y * 1.0f - RESIZER, scale.z * 1.0f - RESIZER);
+                    {
+                        Vector3 scale = selected.transform.lossyScale;
+
+                        if (distanceY > oldDistanceY)
+                            selected.transform.localScale = new Vector3(scale.x * 1.0f + FOTORESIZER, scale.y * 1.0f + FOTORESIZER, scale.z * 1.0f + FOTORESIZER);
+                        else
+                            selected.transform.localScale = new Vector3(scale.x * 1.0f - FOTORESIZER, scale.y * 1.0f - FOTORESIZER, scale.z * 1.0f - FOTORESIZER);
+                    }
                 }
             }
+            else if (Input.GetTouch(0).phase == TouchPhase.Ended || Input.GetTouch(1).phase == TouchPhase.Ended)
+                frame.SetActive(false);
         }
     }
 }
