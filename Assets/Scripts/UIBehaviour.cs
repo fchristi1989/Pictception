@@ -8,7 +8,7 @@ public class UIBehaviour : MonoBehaviour
     private GameObject testPrefab = null;
 
     private const float DISTANCE = 0.3f;
-    private const float FOTORESIZER = 0.001f;
+    private const float FOTORESIZER = 0.0001f;
     private const float FRAMERESIZER = 0.01f;
 
     /*
@@ -18,6 +18,7 @@ public class UIBehaviour : MonoBehaviour
 
     private GameObject selected = null;
     private GameObject frame = null;
+    private GameObject movingTarget = null;
 
     private float oldDistanceY = 0;
     private float distanceY = 0;
@@ -33,6 +34,9 @@ public class UIBehaviour : MonoBehaviour
         Image image = frame.GetComponent<Image>();
         image.rectTransform.sizeDelta = new Vector2(min, min);
         frame.SetActive(false);
+
+        movingTarget = new GameObject("Moving Target");
+        movingTarget.SetActive(false);
     }
 
     // Update is called once per frame
@@ -40,6 +44,7 @@ public class UIBehaviour : MonoBehaviour
     {
         CheckSelect();
         CheckResize();
+        CheckMoving();
     }
 
     private IEnumerator RecordFrame()
@@ -120,8 +125,12 @@ public class UIBehaviour : MonoBehaviour
         if (selected == null)
             return;
 
+        movingTarget.SetActive(true);
+        movingTarget.transform.position = selected.transform.position;
+        movingTarget.transform.rotation = selected.transform.rotation;
+
         Camera mainCamera = Camera.current;
-        selected.transform.parent = mainCamera.transform;
+        movingTarget.transform.parent = mainCamera.transform;
     }
 
     public void OnMoveReleased()
@@ -129,13 +138,12 @@ public class UIBehaviour : MonoBehaviour
         if (selected == null)
             return;
 
-        selected.transform.parent = null;
+        movingTarget.SetActive(false);
     }
 
     public void OnDeleteClick()
     {
-        if (selected == null)
-            return;
+        if (selected == null) return;
 
         Destroy(selected);
         selected = null;
@@ -198,51 +206,73 @@ public class UIBehaviour : MonoBehaviour
 
     private void CheckResize()
     {
-        if (Input.touchCount == 2)
-        {
+        if (Input.touchCount != 2)
+            return;
 
-            if (Input.GetTouch(0).phase == TouchPhase.Moved && Input.GetTouch(1).phase == TouchPhase.Moved)
+        
+        if (Input.GetTouch(0).phase == TouchPhase.Moved && Input.GetTouch(1).phase == TouchPhase.Moved)
+        {
+            if (oldDistanceY == 0)
             {
-                if (oldDistanceY == 0)
+                oldDistanceY = Mathf.Abs(Input.GetTouch(0).position.y - Input.GetTouch(1).position.y);
+                distanceY = oldDistanceY;
+            }
+            else
+            {
+                oldDistanceY = distanceY;
+                distanceY = Mathf.Abs(Input.GetTouch(0).position.y - Input.GetTouch(1).position.y);
+
+                if (selected == null)
                 {
-                    oldDistanceY = Mathf.Abs(Input.GetTouch(0).position.y - Input.GetTouch(1).position.y);
-                    distanceY = oldDistanceY;
+                    frame.SetActive(true);
+
+                    if (distanceY > oldDistanceY && digitalZoom < 1f)
+                    {
+                        digitalZoom += FRAMERESIZER;
+                    }
+                    else if (distanceY < oldDistanceY && digitalZoom > 0f)
+                    {
+                        digitalZoom -= FRAMERESIZER;
+                    }
+
+                    float min = Mathf.Min(Screen.height, Screen.width);
+                    Image image = frame.GetComponent<Image>();
+                    image.rectTransform.sizeDelta = new Vector2(min * digitalZoom, min * digitalZoom);
                 }
                 else
                 {
-                    oldDistanceY = distanceY;
-                    distanceY = Mathf.Abs(Input.GetTouch(0).position.y - Input.GetTouch(1).position.y);
+                    Vector3 scale = selected.transform.lossyScale;
 
-                    if (selected == null)
-                    {
-                        frame.SetActive(true);
-
-                        if (distanceY > oldDistanceY && digitalZoom < 1f)
-                        {
-                            digitalZoom += FRAMERESIZER;
-                        }
-                        else if (distanceY < oldDistanceY && digitalZoom > 0f)
-                        {
-                            digitalZoom -= FRAMERESIZER;
-                        }
-
-                        float min = Mathf.Min(Screen.height, Screen.width);
-                        Image image = frame.GetComponent<Image>();
-                        image.rectTransform.sizeDelta = new Vector2(min * digitalZoom, min * digitalZoom);
-                    }
+                    if (distanceY > oldDistanceY)
+                        selected.transform.localScale = new Vector3(scale.x * 1.0f + FOTORESIZER, scale.y * 1.0f + FOTORESIZER, scale.z * 1.0f + FOTORESIZER);
                     else
-                    {
-                        Vector3 scale = selected.transform.lossyScale;
-
-                        if (distanceY > oldDistanceY)
-                            selected.transform.localScale = new Vector3(scale.x * 1.0f + FOTORESIZER, scale.y * 1.0f + FOTORESIZER, scale.z * 1.0f + FOTORESIZER);
-                        else
-                            selected.transform.localScale = new Vector3(scale.x * 1.0f - FOTORESIZER, scale.y * 1.0f - FOTORESIZER, scale.z * 1.0f - FOTORESIZER);
-                    }
+                        selected.transform.localScale = new Vector3(scale.x * 1.0f - FOTORESIZER, scale.y * 1.0f - FOTORESIZER, scale.z * 1.0f - FOTORESIZER);
                 }
             }
-            else if (Input.GetTouch(0).phase == TouchPhase.Ended || Input.GetTouch(1).phase == TouchPhase.Ended)
-                frame.SetActive(false);
         }
+        else if (Input.GetTouch(0).phase == TouchPhase.Ended || Input.GetTouch(1).phase == TouchPhase.Ended)
+            frame.SetActive(false);
+    }
+
+    private void CheckMoving()
+    {
+        if (selected == null) return;
+        if (!movingTarget.activeSelf) return;
+
+        Vector3 selectedPosition = selected.transform.position;
+        Vector3 targetPosition = movingTarget.transform.position;
+        float posX = (selectedPosition.x * 3 + targetPosition.x) / 4;
+        float posY = (selectedPosition.y * 3 + targetPosition.y) / 4;
+        float posZ = (selectedPosition.z * 3 + targetPosition.z) / 4;
+        selected.transform.position = new Vector3(posX, posY, posZ);
+
+        Quaternion selectedRotation = selected.transform.rotation;
+        Quaternion targetRotation = movingTarget.transform.rotation;
+        float rotX = (selectedRotation.x * 3 + targetRotation.x) / 4;
+        float rotY = (selectedRotation.y * 3 + targetRotation.y) / 4;
+        float rotZ = (selectedRotation.z * 3 + targetRotation.z) / 4;
+        float rotW = (selectedRotation.w * 3 + targetRotation.w) / 4;
+        selected.transform.rotation = new Quaternion(rotX, rotY, rotZ, rotW);
+
     }
 }
